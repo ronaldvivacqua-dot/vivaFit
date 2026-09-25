@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>VIVA Fitness — Planner</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+
+  :root {
+    --bg: #353535;
+    --panel: #2c2c2c;
+    --panel-raised: #404040;
+    --teal: #3c6e71;
+    --teal-soft: rgba(60,110,113,0.25);
+    --navy: #284b63;
+    --navy-soft: rgba(40,75,99,0.35);
+    --gray: #d9d9d9;
+    --cream: #fffcf2;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  button, .date-chip { touch-action: manipulation; }
+  html, body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--cream);
+    font-family: 'Inter', sans-serif; min-height: 100vh;
+  }
+  #app { max-width: 480px; margin: 0 auto; padding-bottom: 60px; min-height: 100vh; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 20px 14px; border-bottom: 1px solid var(--panel-raised);
+  }
+  .wordmark { font-family: 'Oswald', sans-serif; font-size: 19px; }
+  .wordmark .accent { font-weight: 400; letter-spacing: 0.13em; color: var(--teal); }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; border: none; border-radius: 20px;
+    padding: 9px 16px; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px;
+    cursor: pointer; background: var(--teal); color: var(--cream);
+  }
+  .btn.ghost {
+    background: transparent; border: 1.5px solid var(--panel-raised); color: var(--cream);
+    border-radius: 8px;
+  }
+  .btn:disabled { opacity: 0.5; cursor: default; }
+
+  .signin-screen {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; gap: 16px; padding: 80px 30px; min-height: 60vh;
+  }
+  .signin-screen .msg { font-family: 'Oswald', sans-serif; font-size: 20px; color: var(--gray); }
+
+  .date-strip { display: flex; gap: 8px; padding: 14px 20px; overflow-x: auto; }
+  .date-chip {
+    flex: 0 0 auto; width: 54px; padding: 8px 0; border-radius: 12px; cursor: pointer;
+    border: 1.5px solid transparent; background: var(--panel); color: var(--cream); text-align: center;
+  }
+  .date-chip.selected { border-color: var(--teal); background: var(--teal-soft); }
+  .date-chip .day { font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; opacity: 0.65; text-transform: uppercase; }
+  .date-chip .num { font-family: 'Oswald', sans-serif; font-size: 15px; margin-top: 2px; }
+  .date-chip .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--teal); margin: 4px auto 0; }
+
+  main { padding: 6px 20px; }
+  .day-label {
+    font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--gray);
+    opacity: 0.7; text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  #title-input {
+    font-family: 'Oswald', sans-serif; font-size: 24px; background: transparent; border: none;
+    color: var(--cream); outline: none; width: 100%; margin-top: 2px; padding: 3px 0;
+  }
+
+  .empty-hint {
+    border: 1.5px dashed var(--panel-raised); border-radius: 14px; padding: 28px 16px;
+    text-align: center; color: var(--gray); opacity: 0.8; font-size: 13px; margin-top: 8px;
+  }
+
+  .part-card { background: var(--panel); border-radius: 12px; padding: 14px; border: 1px solid var(--panel-raised); margin-top: 10px; }
+  .part-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .part-num { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--teal); min-width: 18px; }
+  .part-title-input {
+    font-family: 'Oswald', sans-serif; font-size: 16px; background: transparent; border: none;
+    color: var(--cream); outline: none; flex: 1;
+  }
+  .icon-btn {
+    background: transparent; border: none; color: var(--gray); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    min-width: 36px; min-height: 36px; border-radius: 8px;
+  }
+  .icon-btn:active { background: var(--panel-raised); }
+  .icon-btn:disabled { color: #666; cursor: default; }
+  .icon-btn:disabled:active { background: transparent; }
+  .part-content {
+    width: 100%; background: var(--bg); border: 1px solid var(--panel-raised); border-radius: 8px;
+    color: var(--cream); font-family: 'Inter', sans-serif; font-size: 16px; padding: 9px;
+    outline: none; resize: none; overflow-y: hidden; line-height: 1.5;
+  }
+
+  .action-row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+
+  .save-bar {
+    position: sticky; bottom: 0; display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 12px 20px; background: var(--bg); border-top: 1px solid var(--panel-raised);
+  }
+  #save-status { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--gray); opacity: 0.6; }
+
+  .sheet-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 10;
+    display: flex; align-items: flex-end; justify-content: center;
+  }
+  .sheet {
+    width: 100%; max-width: 480px; background: var(--panel); border-top-left-radius: 24px;
+    border-top-right-radius: 24px; padding: 18px 20px 28px; max-height: 75vh; overflow-y: auto;
+  }
+  .sheet-handle { width: 40px; height: 4px; background: var(--panel-raised); border-radius: 2px; margin: 0 auto 14px; }
+  .sheet-title-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .sheet-title { font-family: 'Oswald', sans-serif; font-size: 19px; }
+  .template-card { background: var(--navy-soft); border: 1px solid var(--navy); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+  .template-name { font-family: 'Oswald', sans-serif; font-size: 15px; }
+  .template-meta { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--gray); opacity: 0.75; margin: 4px 0 10px; }
+
+  input[type=text].sheet-input {
+    width: 100%; background: var(--bg); border: 1px solid var(--panel-raised); border-radius: 10px;
+    padding: 12px 14px; color: var(--cream); outline: none; font-family: 'Inter', sans-serif; font-size: 16px;
+  }
+
+  /* --------------------------------------------------------------
+     MOBILE (phone-width) OPTIMIZATIONS
+     Desktop/mouse layout above is left as-is since it's already
+     working well; these rules only kick in on narrow viewports.
+  -------------------------------------------------------------- */
+  @media (max-width: 600px) {
+    .date-strip {
+      -webkit-overflow-scrolling: touch;
+      scroll-snap-type: x proximity;
+      padding: 14px 16px;
+    }
+    .date-chip {
+      scroll-snap-align: start;
+      width: 60px;
+      padding: 10px 0;
+    }
+    header { padding: 16px 16px 14px; }
+    main { padding: 6px 16px; }
+
+    /* Bigger, easier tap targets for the reorder/delete controls */
+    .icon-btn { min-width: 44px; min-height: 44px; }
+    .part-head { gap: 2px; }
+
+    .btn { padding: 12px 18px; font-size: 14px; }
+    .btn.ghost { padding: 11px 14px; }
+
+    /* Comfortable typing area, and 16px+ everywhere above already
+       prevents Safari's zoom-on-focus for text fields. */
+    .part-content { min-height: 90px; padding: 12px; }
+    #title-input { font-size: 22px; padding: 8px 0; }
+
+    .save-bar { padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); }
+    .sheet { padding: 18px 16px calc(28px + env(safe-area-inset-bottom)); }
+  }
+</style>
+</head>
+<body>
+  <div id="app"></div>
+
+<script>
+  // ---------------------------------------------------------------
+  // GOOGLE CONFIG — same Drive file the TV display reads from.
+  // ---------------------------------------------------------------
+  const DRIVE_FILE_ID = "1AA38dURLTdFo6s_oFK5StRd89HEUKRx3";
+  const CLIENT_ID = "249539347836-0ich1f0igial0mk9sujb6unm63ghhtn8.apps.googleusercontent.com";
+  const SCOPE = "https://www.googleapis.com/auth/drive";
+
+  let accessToken = null;
+  let tokenClient = null;
+  let schedule = { workoutsByDate: {}, templates: [] };
+  let selectedDate = new Date();
+  let sheetOpen = null; // null | "templates" | "saveTemplate"
+  let saveTimer = null;
+
+  const pad = (n) => String(n).padStart(2, "0");
+  const toKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const addDays = (d, n) => { const nd = new Date(d); nd.setDate(nd.getDate() + n); return nd; };
+  const dayLabel = (d) => d.toLocaleDateString(undefined, { weekday: "short" });
+  const fullLabel = (d) => d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  const uid = () => Math.random().toString(36).slice(2, 10);
+  const escapeHtml = (str) => { const d = document.createElement("div"); d.innerText = str || ""; return d.innerHTML; };
+  const todayKey = () => toKey(new Date());
+
+  function currentWorkout() {
+    const key = toKey(selectedDate);
+    return schedule.workoutsByDate[key] || { title: "", parts: [] };
+  }
+  function setCurrentWorkout(next) {
+    const key = toKey(selectedDate);
+    schedule.workoutsByDate[key] = next;
+    scheduleSave();
+    render();
+  }
+  // For plain text edits (typing in a title/content field). Updates the
+  // data model and queues a save WITHOUT re-rendering — re-rendering on
+  // every keystroke would destroy and recreate the input you're typing
+  // into, killing focus and cursor position.
+  function updateCurrentWorkoutSilent(next) {
+    const key = toKey(selectedDate);
+    schedule.workoutsByDate[key] = next;
+    scheduleSave();
+  }
+
+  // --- Google Sign-In -------------------------------------------------
+  function initGoogle() {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPE,
+      callback: async (resp) => {
+        if (resp.error) { alert("Sign-in failed: " + resp.error); return; }
+        accessToken = resp.access_token;
+        await loadSchedule();
+        render();
+      },
+    });
+  }
+
+  function signIn() {
+    if (CLIENT_ID.startsWith("YOUR_CLIENT_ID")) {
+      alert("This page isn't connected to Google yet — CLIENT_ID still needs to be filled in.");
+      return;
+    }
+    tokenClient.requestAccessToken();
+  }
+
+  async function loadSchedule() {
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${DRIVE_FILE_ID}?alt=media`,
+        { headers: { Authorization: "Bearer " + accessToken } }
+      );
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      schedule = {
+        workoutsByDate: data.workoutsByDate || {},
+        templates: data.templates || [],
+      };
+    } catch (err) {
+      console.error("Failed to load schedule:", err);
+      alert("Couldn't load the current schedule from Drive. Starting from an empty one — be careful saving, as it could overwrite existing data. Check the console for details.");
+    }
+  }
+
+  async function saveSchedule() {
+    setSaveStatus("Saving…");
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/upload/drive/v3/files/${DRIVE_FILE_ID}?uploadType=media`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: "Bearer " + accessToken,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(schedule),
+        }
+      );
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      setSaveStatus("Saved · " + new Date().toLocaleTimeString());
+    } catch (err) {
+      console.error("Save failed:", err);
+      setSaveStatus("Save failed — check connection and try again");
+    }
+  }
+
+  // Debounce saves so rapid typing doesn't fire a network request per keystroke.
+  function scheduleSave() {
+    setSaveStatus("Editing…");
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveSchedule, 900);
+  }
+
+  function setSaveStatus(text) {
+    const el = document.getElementById("save-status");
+    if (el) el.textContent = text;
+  }
+
+  // --- Rendering --------------------------------------------------------
+  function render() {
+    const app = document.getElementById("app");
+
+    if (!accessToken) {
+      app.innerHTML = `
+        <header>
+          <div class="wordmark">VIVA <span class="accent">FITNESS</span></div>
+        </header>
+        <div class="signin-screen">
+          <div class="msg">Sign in with Google to plan workouts</div>
+          <button class="btn" onclick="signIn()">Sign in with Google</button>
+        </div>
+      `;
+      return;
+    }
+
+    const workout = currentWorkout();
+    const days = Array.from({ length: 21 }, (_, i) => addDays(new Date(), i - 7));
+
+    const dateChips = days.map((d) => {
+      const key = toKey(d);
+      const isSelected = key === toKey(selectedDate);
+      const hasWorkout = !!schedule.workoutsByDate[key];
+      return `
+        <div class="date-chip ${isSelected ? "selected" : ""}" onclick="selectDate('${key}')">
+          <div class="day">${dayLabel(d)}</div>
+          <div class="num">${d.getDate()}</div>
+          ${hasWorkout ? '<div class="dot"></div>' : ""}
+        </div>`;
+    }).join("");
+
+    const partsHtml = workout.parts.map((p, i) => `
+      <div class="part-card">
+        <div class="part-head">
+          <span class="part-num">${pad(i + 1)}</span>
+          <input class="part-title-input" value="${escapeHtml(p.title)}" oninput="updatePart(${i}, 'title', this.value)" />
+          <button class="icon-btn" ${i === 0 ? "disabled" : ""} onclick="movePart(${i}, -1)">▲</button>
+          <button class="icon-btn" ${i === workout.parts.length - 1 ? "disabled" : ""} onclick="movePart(${i}, 1)">▼</button>
+          <button class="icon-btn" onclick="removePart(${i})">✕</button>
+        </div>
+        <textarea class="part-content" rows="3" oninput="updatePart(${i}, 'content', this.value); autoGrow(this)">${escapeHtml(p.content)}</textarea>
+      </div>
+    `).join("");
+
+    app.innerHTML = `
+      <header>
+        <div class="wordmark">VIVA <span class="accent">FITNESS</span></div>
+        <button class="btn ghost" onclick="signOut()">Sign out</button>
+      </header>
+      <div class="date-strip">${dateChips}</div>
+      <main>
+        <div class="day-label">${fullLabel(selectedDate)}</div>
+        <input id="title-input" value="${escapeHtml(workout.title)}" placeholder="Name this session"
+               oninput="updateTitle(this.value)" />
+        ${workout.parts.length === 0 ? '<div class="empty-hint">No parts yet. Add one, or use a template.</div>' : partsHtml}
+        <div class="action-row">
+          <button class="btn ghost" onclick="addPart()">+ Add part</button>
+          <button class="btn ghost" onclick="openSheet('templates')">Templates</button>
+          ${workout.parts.length > 0 ? '<button class="btn ghost" onclick="openSheet(\'saveTemplate\')">Save as template</button>' : ""}
+        </div>
+      </main>
+      <div class="save-bar">
+        <span id="save-status">Loaded</span>
+        <button class="btn" onclick="saveSchedule()">Save now</button>
+      </div>
+      ${renderSheet()}
+    `;
+
+    // New textareas start at their natural (possibly multi-line)
+    // content size rather than a clipped fixed height.
+    document.querySelectorAll(".part-content").forEach(autoGrow);
+  }
+
+  window.autoGrow = function (el) {
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+  };
+
+  function renderSheet() {
+    if (!sheetOpen) return "";
+
+    if (sheetOpen === "templates") {
+      const cards = schedule.templates.map((t) => `
+        <div class="template-card">
+          <div class="template-name">${escapeHtml(t.name)}</div>
+          <div class="template-meta">${t.parts.length} part${t.parts.length !== 1 ? "s" : ""} · ${t.parts.map(p => escapeHtml(p.title)).join(", ")}</div>
+          <button class="btn ghost" style="padding:6px 12px;font-size:12px;" onclick="applyTemplate('${t.id}')">Apply to this day</button>
+          <button class="icon-btn" onclick="deleteTemplate('${t.id}')" style="margin-left:8px;">✕</button>
+        </div>
+      `).join("") || '<div class="empty-hint">No templates saved yet.</div>';
+
+      return `
+        <div class="sheet-backdrop" onclick="closeSheet(event)">
+          <div class="sheet" onclick="event.stopPropagation()">
+            <div class="sheet-handle"></div>
+            <div class="sheet-title-row"><span class="sheet-title">Apply a template</span>
+              <button class="icon-btn" onclick="closeSheet()">✕</button></div>
+            ${cards}
+          </div>
+        </div>`;
+    }
+
+    if (sheetOpen === "saveTemplate") {
+      return `
+        <div class="sheet-backdrop" onclick="closeSheet(event)">
+          <div class="sheet" onclick="event.stopPropagation()">
+            <div class="sheet-handle"></div>
+            <div class="sheet-title-row"><span class="sheet-title">Save as template</span>
+              <button class="icon-btn" onclick="closeSheet()">✕</button></div>
+            <input id="template-name-input" type="text" class="sheet-input" placeholder="Template name, e.g. Leg Day Classic" />
+            <button class="btn" style="width:100%;justify-content:center;margin-top:12px;" onclick="saveAsTemplate()">Save template</button>
+          </div>
+        </div>`;
+    }
+    return "";
+  }
+
+  // --- Actions (exposed on window for inline onclick handlers) ---------
+  window.selectDate = (key) => {
+    const [y, m, d] = key.split("-").map(Number);
+    selectedDate = new Date(y, m - 1, d);
+    render();
+  };
+  window.updateTitle = (value) => {
+    const w = currentWorkout(); w.title = value; updateCurrentWorkoutSilent(w);
+  };
+  window.addPart = () => {
+    const w = currentWorkout(); w.parts.push({ title: "New Part", content: "" }); setCurrentWorkout(w);
+  };
+  window.removePart = (i) => {
+    const w = currentWorkout(); w.parts.splice(i, 1); setCurrentWorkout(w);
+  };
+  window.movePart = (i, dir) => {
+    const w = currentWorkout(); const j = i + dir;
+    if (j < 0 || j >= w.parts.length) return;
+    [w.parts[i], w.parts[j]] = [w.parts[j], w.parts[i]];
+    setCurrentWorkout(w);
+  };
+  window.updatePart = (i, field, value) => {
+    const w = currentWorkout(); w.parts[i][field] = value; updateCurrentWorkoutSilent(w);
+  };
+  window.openSheet = (name) => { sheetOpen = name; render(); };
+  window.closeSheet = (e) => { if (e && e.target !== e.currentTarget) return; sheetOpen = null; render(); };
+  window.applyTemplate = (id) => {
+    const tpl = schedule.templates.find((t) => t.id === id);
+    if (!tpl) return;
+    const w = currentWorkout();
+    setCurrentWorkout({ title: w.title || tpl.name, parts: tpl.parts.map((p) => ({ ...p })) });
+    sheetOpen = null; render();
+  };
+  window.deleteTemplate = (id) => {
+    schedule.templates = schedule.templates.filter((t) => t.id !== id);
+    scheduleSave(); render();
+  };
+  window.saveAsTemplate = () => {
+    const name = document.getElementById("template-name-input").value.trim();
+    const w = currentWorkout();
+    if (!name || w.parts.length === 0) return;
+    schedule.templates.push({ id: uid(), name, parts: w.parts.map((p) => ({ ...p })) });
+    sheetOpen = null;
+    scheduleSave(); render();
+  };
+  window.saveSchedule = saveSchedule;
+  window.signIn = signIn;
+  window.signOut = () => { accessToken = null; render(); };
+
+  window.addEventListener("load", () => {
+    // Google's script loads async — poll briefly until it's ready.
+    const wait = setInterval(() => {
+      if (window.google && google.accounts) {
+        clearInterval(wait);
+        initGoogle();
+        render();
+      }
+    }, 100);
+  });
+</script>
+</body>
+</html>
