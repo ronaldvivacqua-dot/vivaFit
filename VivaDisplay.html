@@ -482,13 +482,7 @@
   // it and Up/Down scroll it, instead of switching columns/pieces.
   // -------------------------------------------------------------------
   function getColumnCount() {
-    try {
-      const v = parseInt(localStorage.getItem("viva-tv-columns"), 10);
-      return v >= 1 && v <= 4 ? v : null;
-    } catch (_) { return null; }
-  }
-  function persistColumnCount(n) {
-    try { localStorage.setItem("viva-tv-columns", String(n)); } catch (_) { /* non-fatal */ }
+    return null; // no longer persisted — the picker is meant to show on every load/refresh
   }
 
   let columnCount = getColumnCount();
@@ -590,7 +584,6 @@
 
   function confirmColumnCount(n) {
     columnCount = n;
-    persistColumnCount(n);
     initColumns();
     renderColumns();
   }
