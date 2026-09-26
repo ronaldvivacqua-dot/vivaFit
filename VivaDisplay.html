@@ -108,6 +108,49 @@
     white-space: pre-wrap; margin-top: 26px; flex: 1;
   }
 
+  /* ------------------------------------------------------------------
+     MULTI-COLUMN TV LAYOUT (replaces the old single rail+panel view
+     above, which is left in place unused rather than risk breaking
+     something by deleting it).
+  ------------------------------------------------------------------ */
+  .columns-row { display: flex; flex: 1; padding: 10px 40px 30px; gap: 24px; min-height: 0; }
+  .tv-column {
+    flex: 1; min-width: 0; position: relative; background: var(--panel); border-radius: 20px;
+    border: 2px solid transparent; padding: 30px 36px; display: flex; flex-direction: column;
+  }
+  .tv-column.focused { border-color: var(--panel-raised); }
+  .tv-column.focused:not(.active) { border-color: var(--teal); }
+  .tv-column.active { border-color: var(--teal); box-shadow: 0 0 0 6px var(--teal-soft); }
+  .col-content { overflow-y: auto; scroll-behavior: smooth; flex: 1; }
+  .col-title {
+    font-family: 'Oswald', sans-serif; font-weight: 700; letter-spacing: 0.01em;
+    font-size: calc(32px * var(--col-scale, 1));
+  }
+  .col-body {
+    font-family: 'Inter', sans-serif; line-height: 1.6; white-space: pre-wrap; margin-top: 18px;
+    font-size: calc(19px * var(--col-scale, 1));
+  }
+  .col-dots {
+    position: absolute; top: 28px; right: 16px; display: flex; flex-direction: column; gap: 7px; z-index: 2;
+  }
+  .col-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--panel-raised); }
+  .col-dot.filled { background: var(--teal); }
+
+  .picker-screen {
+    height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 30px;
+  }
+  .picker-title { font-family: 'Oswald', sans-serif; font-size: 32px; }
+  .picker-options { display: flex; gap: 18px; }
+  .picker-option {
+    width: 90px; height: 90px; border-radius: 18px; background: var(--panel); border: 2px solid var(--panel-raised);
+    display: flex; align-items: center; justify-content: center; font-family: 'Oswald', sans-serif; font-size: 34px;
+  }
+  .picker-option.selected { border-color: var(--teal); background: var(--teal-soft); }
+  .picker-hint {
+    font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--gray); opacity: 0.6;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+
   footer {
     display: flex; align-items: center; justify-content: center; gap: 8px;
     padding: 14px 0 30px; font-family: 'IBM Plex Mono', monospace; font-size: 12.5px;
@@ -362,10 +405,9 @@
       }
 
       lastRawJson = rawText;
-      const previousIdx = activeIdx;
       fullSchedule = data;
       workout = extractTodaysWorkout(data);
-      renderForViewport(previousIdx);
+      renderForViewport();
       setSyncStatus("Synced · " + new Date().toLocaleTimeString());
     } catch (err) {
       // Network hiccup or bad config: keep showing whatever we already
@@ -423,40 +465,38 @@
   function isMobileViewport() {
     return window.matchMedia("(max-width: 820px)").matches;
   }
-  function renderForViewport(preserveIdx) {
+  function renderForViewport() {
     if (isMobileViewport()) {
       buildMobile();
     } else {
-      build(preserveIdx);
+      build();
     }
   }
 
-  let activeIdx = 0;
-  const zoomLevels = [1, 1.15, 1.3, 1.45, 0.85];
-  let zoomIdx = 0;
-  let items = [];
-
-  function updateFooter() {
-    const pct = Math.round(zoomLevels[zoomIdx] * 100);
-    document.getElementById("progress-label").innerHTML =
-      `<span class="hint-remote">←→ parts · ↑↓ scroll · OK: zoom (${pct}%) · hold OK: theme · Part ${activeIdx + 1} of ${workout.parts.length}</span>` +
-      `<span class="hint-touch">Tap a part below to view it · Part ${activeIdx + 1} of ${workout.parts.length}</span>`;
+  // -------------------------------------------------------------------
+  // MULTI-COLUMN TV VIEW
+  // On first run (per device), asks how many columns (1–4) to show.
+  // Each column independently pages through the workout's parts; the
+  // focused column shows a dot stack (which piece it's on); pressing
+  // OK "activates" the focused column, at which point Left/Right zoom
+  // it and Up/Down scroll it, instead of switching columns/pieces.
+  // -------------------------------------------------------------------
+  function getColumnCount() {
+    try {
+      const v = parseInt(localStorage.getItem("viva-tv-columns"), 10);
+      return v >= 1 && v <= 4 ? v : null;
+    } catch (_) { return null; }
+  }
+  function persistColumnCount(n) {
+    try { localStorage.setItem("viva-tv-columns", String(n)); } catch (_) { /* non-fatal */ }
   }
 
-  function renderActivePanel() {
-    const active = workout.parts[activeIdx];
-    const panel = document.getElementById("active-panel");
-    panel.innerHTML = `
-      <div class="active-title">${escapeHtml(active.title)}</div>
-      <div class="active-content">${escapeHtml(active.content || "—")}</div>
-    `;
-    panel.scrollTop = 0;
-    updateFooter();
+  let columnCount = getColumnCount();
+  let columns = [];
+  let focusedColumn = 0;
+  let pickerSelection = 2;
 
-    document.querySelectorAll(".rail-item").forEach((el, i) => {
-      el.classList.toggle("active", i === activeIdx);
-    });
-  }
+  function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
 
   function showToast(text) {
     const toast = document.getElementById("zoom-toast");
@@ -466,18 +506,126 @@
     showToast._t = setTimeout(() => toast.classList.remove("show"), 1200);
   }
 
-  function applyZoom(idx) {
-    zoomIdx = ((idx % zoomLevels.length) + zoomLevels.length) % zoomLevels.length;
-    document.documentElement.style.setProperty("--scale", zoomLevels[zoomIdx]);
-    updateFooter();
+  function initColumns() {
+    const total = workout.parts.length;
+    columns = Array.from({ length: columnCount }, (_, i) => ({
+      partIndex: total ? Math.min(i, total - 1) : 0,
+      active: false,
+      zoom: 1,
+    }));
+    focusedColumn = 0;
   }
 
-  function setZoom(idx) {
-    applyZoom(idx);
-    showToast(`Text size: ${Math.round(zoomLevels[zoomIdx] * 100)}%`);
+  function currentScrollTops() {
+    return columns.map((_, i) => {
+      const el = document.getElementById("col-content-" + i);
+      return el ? el.scrollTop : 0;
+    });
+  }
+  function restoreScrollTops(tops, skipIndex) {
+    columns.forEach((_, i) => {
+      if (i === skipIndex) return;
+      const el = document.getElementById("col-content-" + i);
+      if (el) el.scrollTop = tops[i] || 0;
+    });
   }
 
-  function build(preserveIdx) {
+  function updateHint() {
+    const el = document.getElementById("progress-label");
+    if (!el) return;
+    const col = columns[focusedColumn];
+    el.textContent = col && col.active
+      ? `←→ zoom (${Math.round(col.zoom * 100)}%) · ↑↓ scroll · OK: done with this column · hold OK: theme`
+      : `←→ switch column · ↑↓ change piece · OK: zoom/scroll this column · hold OK: theme`;
+  }
+
+  function renderColumns() {
+    const app = document.getElementById("app");
+    const total = workout.parts.length;
+
+    const colsHtml = columns.map((col, i) => {
+      const idx = clamp(col.partIndex, 0, total - 1);
+      const p = workout.parts[idx];
+      const isFocused = i === focusedColumn;
+      const dotsHtml = isFocused ? `
+        <div class="col-dots">
+          ${workout.parts.map((_, di) => `<div class="col-dot ${di === idx ? "filled" : ""}"></div>`).join("")}
+        </div>` : "";
+      return `
+        <div class="tv-column ${isFocused ? "focused" : ""} ${col.active ? "active" : ""}">
+          ${dotsHtml}
+          <div class="col-content" id="col-content-${i}" style="--col-scale: ${col.zoom}">
+            <div class="col-title">${escapeHtml(p.title)}</div>
+            <div class="col-body">${escapeHtml(p.content || "—")}</div>
+          </div>
+        </div>`;
+    }).join("");
+
+    app.innerHTML = `
+      <header>
+        <div>
+          <div class="date-label">${formatFullDate(workout.date)}</div>
+          <div class="title-label">${escapeHtml(workout.title || "Today's Session")}</div>
+        </div>
+      </header>
+      <div class="columns-row">${colsHtml}</div>
+      <footer id="progress-label"></footer>
+    `;
+    updateHint();
+  }
+
+  function renderPicker() {
+    const app = document.getElementById("app");
+    const options = [1, 2, 3, 4].map((n) => `
+      <div class="picker-option ${n === pickerSelection ? "selected" : ""}">${n}</div>
+    `).join("");
+    app.innerHTML = `
+      <div class="picker-screen">
+        <div class="picker-title">How many columns?</div>
+        <div class="picker-options">${options}</div>
+        <div class="picker-hint">←→ choose · OK to confirm</div>
+      </div>
+    `;
+  }
+
+  function confirmColumnCount(n) {
+    columnCount = n;
+    persistColumnCount(n);
+    initColumns();
+    renderColumns();
+  }
+
+  function changePiece(colIndex, delta) {
+    const total = workout.parts.length;
+    const tops = currentScrollTops();
+    columns[colIndex].partIndex = clamp(columns[colIndex].partIndex + delta, 0, total - 1);
+    renderColumns();
+    restoreScrollTops(tops, colIndex); // the changed column intentionally resets to top; others keep their place
+  }
+
+  function adjustZoom(colIndex, delta) {
+    columns[colIndex].zoom = clamp(columns[colIndex].zoom + delta * 0.15, 0.7, 2.2);
+    const el = document.getElementById("col-content-" + colIndex);
+    if (el) el.style.setProperty("--col-scale", columns[colIndex].zoom);
+    updateHint();
+    showToast(`Zoom: ${Math.round(columns[colIndex].zoom * 100)}%`);
+  }
+
+  function scrollColumnBy(colIndex, deltaPx) {
+    const el = document.getElementById("col-content-" + colIndex);
+    if (el) el.scrollBy({ top: deltaPx, behavior: "smooth" });
+  }
+
+  function toggleActiveColumn() {
+    const col = columns[focusedColumn];
+    col.active = !col.active;
+    const tops = currentScrollTops();
+    renderColumns();
+    restoreScrollTops(tops);
+    showToast(col.active ? "Zoom / scroll this column" : "Browsing columns");
+  }
+
+  function build() {
     const app = document.getElementById("app");
 
     if (!workout || !workout.parts || workout.parts.length === 0) {
@@ -488,55 +636,13 @@
       return;
     }
 
-    activeIdx = (typeof preserveIdx === "number" && preserveIdx < workout.parts.length) ? preserveIdx : 0;
+    if (columnCount === null) {
+      renderPicker();
+      return;
+    }
 
-    const railHtml = workout.parts.map((p, i) => `
-      <button class="rail-item" data-idx="${i}" tabindex="0">
-        <div class="rail-dot"></div>
-        <div>
-          <div class="rail-part-num">Part ${pad(i + 1)}</div>
-          <div class="rail-part-title">${escapeHtml(p.title)}</div>
-        </div>
-      </button>
-    `).join("");
-
-    app.innerHTML = `
-      <header>
-        <div>
-          <div class="date-label">${formatFullDate(workout.date)}</div>
-          <div class="title-label">${escapeHtml(workout.title || "Today's Session")}</div>
-        </div>
-      </header>
-      <div class="body-row">
-        <div class="rail">${railHtml}</div>
-        <div class="active-panel" id="active-panel"></div>
-      </div>
-      <footer id="progress-label"></footer>
-    `;
-
-    items = Array.from(document.querySelectorAll(".rail-item"));
-
-    // React to real browser focus — this is what makes it work whether
-    // the TV browser forwards raw key events or handles d-pad spatial
-    // navigation internally and just moves focus for us.
-    items.forEach((el) => {
-      el.addEventListener("focus", () => {
-        activeIdx = Number(el.dataset.idx);
-        renderActivePanel();
-      });
-      // iOS Safari doesn't reliably fire "focus" on a tapped button,
-      // so tapping needs its own handler for touch/mobile viewing.
-      // Harmless on TV remotes, which never send click events.
-      el.addEventListener("click", () => {
-        activeIdx = Number(el.dataset.idx);
-        el.focus();
-        renderActivePanel();
-      });
-    });
-
-    items[0].focus();
-    applyZoom(zoomIdx);
-    renderActivePanel();
+    if (columns.length !== columnCount) initColumns();
+    renderColumns();
   }
 
   // -----------------------------------------------------------------
@@ -623,36 +729,57 @@
     buildMobile();
   };
 
-  // Remote control scheme (registered once, reads current `items` /
-  // `workout` via closure so it stays correct across data refreshes):
-  //   Left / Right  → switch between parts
-  //   Up / Down     → scroll the current part's content
-  //   OK / Enter (tap)   → cycle text size (zoom)
+  // Remote control scheme (registered once):
+  //   No column chosen yet → Left/Right pick a count, OK confirms
+  //   Left / Right  → switch focused column (or zoom it, if active)
+  //   Up / Down     → change that column's piece (or scroll it, if active)
+  //   OK / Enter (tap)   → activate/deactivate the focused column
   //   OK / Enter (hold)  → toggle dark / light mode
   let okHoldTimer = null;
   let okHoldFired = false;
   const OK_HOLD_MS = 600;
 
   document.addEventListener("keydown", (e) => {
-    if (!workout || !items.length) return;
-    const panel = document.getElementById("active-panel");
+    if (!workout) return;
+
+    if (columnCount === null) {
+      if (e.key === "ArrowRight") { e.preventDefault(); pickerSelection = clamp(pickerSelection + 1, 1, 4); renderPicker(); }
+      else if (e.key === "ArrowLeft") { e.preventDefault(); pickerSelection = clamp(pickerSelection - 1, 1, 4); renderPicker(); }
+      else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (e.repeat) return; confirmColumnCount(pickerSelection); }
+      return;
+    }
+
+    if (!columns.length) return;
+    const col = columns[focusedColumn];
 
     if (e.key === "ArrowRight") {
       e.preventDefault();
-      activeIdx = Math.min(activeIdx + 1, workout.parts.length - 1);
-      items[activeIdx].focus();
-      renderActivePanel();
+      if (col.active) {
+        adjustZoom(focusedColumn, 1);
+      } else {
+        const tops = currentScrollTops();
+        focusedColumn = clamp(focusedColumn + 1, 0, columnCount - 1);
+        renderColumns();
+        restoreScrollTops(tops);
+      }
     } else if (e.key === "ArrowLeft") {
       e.preventDefault();
-      activeIdx = Math.max(activeIdx - 1, 0);
-      items[activeIdx].focus();
-      renderActivePanel();
+      if (col.active) {
+        adjustZoom(focusedColumn, -1);
+      } else {
+        const tops = currentScrollTops();
+        focusedColumn = clamp(focusedColumn - 1, 0, columnCount - 1);
+        renderColumns();
+        restoreScrollTops(tops);
+      }
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      panel.scrollBy({ top: 90, behavior: "smooth" });
+      if (col.active) scrollColumnBy(focusedColumn, 90);
+      else changePiece(focusedColumn, 1);
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      panel.scrollBy({ top: -90, behavior: "smooth" });
+      if (col.active) scrollColumnBy(focusedColumn, -90);
+      else changePiece(focusedColumn, -1);
     } else if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       if (e.repeat) return; // ignore key-repeat while held, we're timing this manually
@@ -667,8 +794,9 @@
 
   document.addEventListener("keyup", (e) => {
     if (e.key === "Enter" || e.key === " ") {
+      if (columnCount === null) return; // picker confirms on keydown directly, nothing to do here
       clearTimeout(okHoldTimer);
-      if (!okHoldFired) setZoom(zoomIdx + 1); // short press: original zoom-cycle behavior
+      if (!okHoldFired) toggleActiveColumn();
       okHoldFired = false;
     }
   });
@@ -684,7 +812,7 @@
     const nowMobile = isMobileViewport();
     if (nowMobile !== lastViewportWasMobile && (workout || fullSchedule)) {
       lastViewportWasMobile = nowMobile;
-      renderForViewport(activeIdx);
+      renderForViewport();
     }
   });
 
