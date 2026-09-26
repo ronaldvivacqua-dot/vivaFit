@@ -403,6 +403,7 @@
       } catch (parseErr) {
         throw new Error("The file's contents aren't valid JSON (" + parseErr.message + ")");
       }
+      data = sanitizeSchedule(data);
 
       lastRawJson = rawText;
       fullSchedule = data;
@@ -432,6 +433,36 @@
   // The planner writes { workoutsByDate: { "2026-08-28": {...} }, templates: [...] }.
   // Still accepts the older single-workout shape (a bare { date, title, parts })
   // so the file you already have keeps working during the transition.
+  // Some workout content was authored with a literal "<b>" where a line
+  // break was intended (likely meant as "<br>", or left over from a
+  // rich-text source). Since content is always HTML-escaped before
+  // display — deliberately, so no tag can ever inject real markup — a
+  // stray tag like that would otherwise show up as literal visible
+  // text. Convert it to an actual line break here, once, centrally.
+  function cleanLegacyTags(text) {
+    if (!text) return text;
+    return text
+      .replace(/<\/?b>/gi, "\n")
+      .replace(/\n{2,}/g, "\n")
+      .replace(/^\n+|\n+$/g, "");
+  }
+
+  function sanitizeSchedule(data) {
+    const cleanPart = (p) => ({ ...p, content: cleanLegacyTags(p.content) });
+    if (data && data.workoutsByDate) {
+      const cleaned = {};
+      Object.keys(data.workoutsByDate).forEach((key) => {
+        const w = data.workoutsByDate[key];
+        cleaned[key] = { ...w, parts: (w.parts || []).map(cleanPart) };
+      });
+      return { ...data, workoutsByDate: cleaned };
+    }
+    if (data && data.parts) {
+      return { ...data, parts: data.parts.map(cleanPart) };
+    }
+    return data;
+  }
+
   function extractTodaysWorkout(data) {
     if (data && data.workoutsByDate) {
       const key = todayKey();
