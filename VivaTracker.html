@@ -86,6 +86,15 @@
     border-radius: 8px; padding: 7px 12px; font-size: 12.5px; font-family: 'Inter', sans-serif;
     font-weight: 600; cursor: pointer; margin-top: 10px;
   }
+  .video-toggle-btn {
+    display: flex; align-items: center; gap: 6px; background: transparent; border: none;
+    color: var(--accent2); font-family: 'Inter', sans-serif; font-weight: 600; font-size: 12.5px;
+    cursor: pointer; padding: 9px 0 2px; width: 100%; text-align: left;
+  }
+  .video-embed {
+    margin: 6px 0 2px; border-radius: 10px; overflow: hidden; background: #000; line-height: 0;
+  }
+  .video-embed iframe, .video-embed video { display: block; width: 100%; border: none; }
 
   .entry-row {
     display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;
@@ -188,6 +197,7 @@
   let progressExercise = null;
   let progressReps = "all";
   let chartInstance = null;
+  let expandedVideos = new Set(); // which parts' videos are currently expanded, keyed by date+part title
 
   // ---------------------------------------------------------------
   // HELPERS
@@ -403,12 +413,21 @@
     } else {
       partsHtml = workout.parts.map((p) => {
         const partEntries = dateEntries.filter((e) => e.partTitle === p.title);
+        const videoKey = toKey(selectedDate) + "__" + p.title;
+        const isVideoOpen = expandedVideos.has(videoKey);
+        const videoBlock = p.videoUrl ? `
+          <button class="video-toggle-btn" onclick="toggleVideo('${escapeHtml(videoKey)}')">
+            ${isVideoOpen ? "▾ Hide video" : "▸ Show video"}
+          </button>
+          ${isVideoOpen ? `<div class="video-embed">${getEmbedHtml(p.videoUrl)}</div>` : ""}
+        ` : "";
         return `
           <div class="part-card">
             <div class="part-title-row">
               <div class="part-title">${escapeHtml(p.title)}</div>
             </div>
             <div class="part-content">${escapeHtml(p.content || "")}</div>
+            ${videoBlock}
             ${partEntries.map(renderEntryRow).join("")}
             <button class="log-add-btn" onclick="openLogSheet('${escapeHtml(p.title)}')">+ Log result</button>
           </div>
@@ -440,6 +459,31 @@
         <button class="entry-del" onclick="deleteEntry('${e.id}')">✕</button>
       </div>`;
   }
+
+  // Turns a YouTube/Vimeo/direct-video URL into embeddable markup.
+  // Falls back to a plain link for anything else so it's never broken,
+  // just less rich.
+  function getEmbedHtml(url) {
+    if (!url) return "";
+    let m = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{6,})/i);
+    if (m) {
+      return `<iframe width="100%" height="220" src="https://www.youtube.com/embed/${m[1]}" title="Workout video" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>`;
+    }
+    m = url.match(/vimeo\.com\/(?:.*\/)?(\d+)/i);
+    if (m) {
+      return `<iframe width="100%" height="220" src="https://player.vimeo.com/video/${m[1]}" title="Workout video" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen loading="lazy"></iframe>`;
+    }
+    if (/\.(mp4|webm|ogg)(\?.*)?$/i.test(url)) {
+      return `<video width="100%" height="220" controls src="${escapeHtml(url)}"></video>`;
+    }
+    return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" style="color:var(--teal);">Open video link ↗</a>`;
+  }
+
+  window.toggleVideo = (key) => {
+    if (expandedVideos.has(key)) expandedVideos.delete(key);
+    else expandedVideos.add(key);
+    renderLogTab();
+  };
 
   window.selectLogDate = (key) => {
     const [y, m, d] = key.split("-").map(Number);
