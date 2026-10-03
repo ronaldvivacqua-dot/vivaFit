@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>VIVA Fitness — Performance Tracker</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+
+  :root {
+    --bg: #142535;
+    --panel: #223241;
+    --panel-raised: #33414f;
+    --teal: #217096;
+    --teal-soft: rgba(33,112,150,0.25);
+    --accent2: #51b8b6;
+    --accent2-soft: rgba(81,184,182,0.22);
+    --gray: #c5d6d7;
+    --cream: #f6f6f0;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--cream);
+    font-family: 'Inter', sans-serif; min-height: 100vh;
+  }
+  #app { max-width: 480px; margin: 0 auto; padding-bottom: 60px; min-height: 100vh; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 20px 14px; border-bottom: 1px solid var(--panel-raised);
+  }
+  .wordmark { font-family: 'Oswald', sans-serif; font-size: 19px; }
+  .wordmark .accent { font-weight: 400; letter-spacing: 0.13em; color: var(--teal); }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; border: none; border-radius: 20px;
+    padding: 9px 16px; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px;
+    cursor: pointer; background: var(--teal); color: var(--cream);
+  }
+  .btn.ghost { background: transparent; border: 1.5px solid var(--panel-raised); color: var(--cream); border-radius: 8px; }
+  .btn.block { width: 100%; justify-content: center; padding: 12px 14px; }
+  .btn:disabled { opacity: 0.5; cursor: default; }
+
+  .signin-screen {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; gap: 16px; padding: 80px 30px; min-height: 60vh;
+  }
+  .signin-screen .msg { font-family: 'Oswald', sans-serif; font-size: 20px; color: var(--gray); }
+  .signin-screen .sub { font-size: 13px; color: var(--gray); opacity: 0.75; max-width: 320px; line-height: 1.5; }
+
+  .tabs { display: flex; gap: 8px; padding: 14px 20px 0; }
+  .tab-btn {
+    flex: 1; background: var(--panel); border: 1.5px solid transparent; color: var(--gray);
+    border-radius: 10px; padding: 10px; font-family: 'Oswald', sans-serif; font-size: 14px;
+    cursor: pointer; text-align: center;
+  }
+  .tab-btn.selected { border-color: var(--teal); background: var(--teal-soft); color: var(--cream); }
+
+  .date-strip { display: flex; gap: 8px; padding: 14px 20px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .date-chip {
+    flex: 0 0 auto; width: 54px; padding: 8px 0; border-radius: 12px; cursor: pointer;
+    border: 1.5px solid transparent; background: var(--panel); color: var(--cream); text-align: center;
+  }
+  .date-chip.selected { border-color: var(--teal); background: var(--teal-soft); }
+  .date-chip .day { font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; opacity: 0.65; text-transform: uppercase; }
+  .date-chip .num { font-family: 'Oswald', sans-serif; font-size: 15px; margin-top: 2px; }
+
+  main { padding: 6px 20px; }
+  .day-label {
+    font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--gray);
+    opacity: 0.7; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px;
+  }
+  .workout-title { font-family: 'Oswald', sans-serif; font-size: 22px; margin-bottom: 14px; }
+
+  .part-card { background: var(--panel); border-radius: 12px; padding: 14px; margin-top: 10px; border: 1px solid var(--panel-raised); }
+  .part-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .part-title { font-family: 'Oswald', sans-serif; font-size: 16px; }
+  .part-content {
+    font-family: 'Inter', sans-serif; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap;
+    color: var(--gray); margin-top: 8px; opacity: 0.9;
+  }
+  .log-add-btn {
+    background: transparent; border: 1.5px dashed var(--panel-raised); color: var(--teal);
+    border-radius: 8px; padding: 7px 12px; font-size: 12.5px; font-family: 'Inter', sans-serif;
+    font-weight: 600; cursor: pointer; margin-top: 10px;
+  }
+
+  .entry-row {
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;
+    background: var(--bg); border-radius: 8px; padding: 9px 11px; margin-top: 8px; font-size: 13px;
+  }
+  .entry-main { font-family: 'IBM Plex Mono', monospace; font-size: 13px; }
+  .entry-notes { color: var(--gray); opacity: 0.75; font-size: 12px; margin-top: 2px; }
+  .entry-del { background: none; border: none; color: var(--gray); opacity: 0.6; cursor: pointer; font-size: 13px; }
+
+  .empty-hint {
+    border: 1.5px dashed var(--panel-raised); border-radius: 14px; padding: 28px 16px;
+    text-align: center; color: var(--gray); opacity: 0.8; font-size: 13px; margin-top: 8px;
+  }
+
+  /* Progress tab */
+  .filters-row { display: flex; gap: 10px; margin: 14px 0; }
+  select.filter-select {
+    flex: 1; background: var(--panel); border: 1px solid var(--panel-raised); color: var(--cream);
+    border-radius: 8px; padding: 10px 10px; font-family: 'Inter', sans-serif; font-size: 14px;
+  }
+  .chart-wrap { background: var(--panel); border-radius: 14px; padding: 16px; margin-top: 4px; }
+  .no-data { text-align: center; color: var(--gray); opacity: 0.7; font-size: 13px; padding: 30px 10px; }
+  .history-list { margin-top: 16px; }
+  .history-row {
+    display: flex; justify-content: space-between; font-family: 'IBM Plex Mono', monospace;
+    font-size: 12.5px; padding: 7px 0; border-bottom: 1px solid var(--panel-raised); color: var(--gray);
+  }
+
+  /* Bottom sheet (shared) */
+  .sheet-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 10;
+    display: flex; align-items: flex-end; justify-content: center;
+  }
+  .sheet {
+    width: 100%; max-width: 480px; background: var(--panel); border-top-left-radius: 24px;
+    border-top-right-radius: 24px; padding: 18px 20px calc(28px + env(safe-area-inset-bottom));
+    max-height: 85vh; overflow-y: auto;
+  }
+  .sheet-handle { width: 40px; height: 4px; background: var(--panel-raised); border-radius: 2px; margin: 0 auto 14px; }
+  .sheet-title-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .sheet-title { font-family: 'Oswald', sans-serif; font-size: 19px; }
+  .icon-btn { background: transparent; border: none; color: var(--gray); cursor: pointer; padding: 4px; }
+
+  .type-switch { display: flex; gap: 8px; margin-bottom: 16px; }
+  .type-switch button {
+    flex: 1; padding: 10px; border-radius: 8px; border: 1.5px solid var(--panel-raised);
+    background: transparent; color: var(--cream); font-family: 'Inter', sans-serif; font-size: 13px; cursor: pointer;
+  }
+  .type-switch button.selected { border-color: var(--accent2); background: var(--accent2-soft); }
+
+  .field-label {
+    font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--gray); opacity: 0.7;
+    text-transform: uppercase; letter-spacing: 0.05em; margin: 12px 0 5px;
+  }
+  .field-row { display: flex; gap: 10px; }
+  input[type=text].field-input, input[type=number].field-input, select.field-input, textarea.field-input {
+    width: 100%; background: var(--bg); border: 1px solid var(--panel-raised); border-radius: 10px;
+    padding: 11px 13px; color: var(--cream); outline: none; font-family: 'Inter', sans-serif; font-size: 16px;
+  }
+  textarea.field-input { resize: vertical; min-height: 60px; }
+
+  @media (max-width: 420px) {
+    .wordmark { font-size: 17px; }
+  }
+</style>
+</head>
+<body>
+  <div id="app"></div>
+
+<script>
+  // ---------------------------------------------------------------
+  // CONFIG
+  // ---------------------------------------------------------------
+  // Shared read-only schedule — same file the TV display and planner use.
+  const SCHEDULE_FILE_ID = "1AA38dURLTdFo6s_oFK5StRd89HEUKRx3";
+  const SCHEDULE_API_KEY = "AIzaSyAYWas9QCcsSK7qXJt6Su8L5038vDUjslg";
+
+  // Each signed-in member gets their OWN log file, created by this app
+  // in THEIR OWN Google Drive — not in the gym's shared folder. That's
+  // what keeps each person's history private without needing any
+  // backend or database.
+  const CLIENT_ID = "249539347836-0ich1f0igial0mk9sujb6unm63ghhtn8.apps.googleusercontent.com";
+  const LOG_SCOPE = "https://www.googleapis.com/auth/drive.file";
+  const LOG_FILE_NAME = "viva-fitness-performance-log.json";
+
+  const DEFAULT_EXERCISES = ["Front Squat", "Back Squat", "Deadlift", "Bench Press", "Shoulder Press", "Clean"];
+
+  // ---------------------------------------------------------------
+  // STATE
+  // ---------------------------------------------------------------
+  let accessToken = null;
+  let tokenClient = null;
+  let schedule = { workoutsByDate: {} };   // read-only, from the shared file
+  let logFileId = null;
+  let log = { exercises: [...DEFAULT_EXERCISES], entries: [] }; // this member's own data
+  let selectedDate = new Date();
+  let activeTab = "log"; // "log" | "progress"
+  let sheet = null; // null | { partTitle }
+  let entryType = "lift"; // "lift" | "metcon" | "note" — within the add-entry sheet
+  let progressExercise = null;
+  let progressReps = "all";
+  let chartInstance = null;
+
+  // ---------------------------------------------------------------
+  // HELPERS
+  // ---------------------------------------------------------------
+  const pad = (n) => String(n).padStart(2, "0");
+  const toKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const addDays = (d, n) => { const nd = new Date(d); nd.setDate(nd.getDate() + n); return nd; };
+  const dayLabel = (d) => d.toLocaleDateString(undefined, { weekday: "short" });
+  const fullLabel = (d) => d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  const uid = () => Math.random().toString(36).slice(2, 10);
+  const escapeHtml = (str) => { const d = document.createElement("div"); d.innerText = str == null ? "" : String(str); return d.innerHTML; };
+
+  function currentWorkout() {
+    const key = toKey(selectedDate);
+    return schedule.workoutsByDate[key] || null;
+  }
+  function entriesForDate(key) {
+    return log.entries.filter((e) => e.date === key);
+  }
+
+  // ---------------------------------------------------------------
+  // SCHEDULE (read-only, public, same as TV/planner)
+  // ---------------------------------------------------------------
+  async function loadSchedule() {
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${SCHEDULE_FILE_ID}?alt=media&key=${SCHEDULE_API_KEY}`,
+        { cache: "no-store" }
+      );
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      schedule = { workoutsByDate: data.workoutsByDate || {} };
+    } catch (err) {
+      console.error("Couldn't load schedule:", err);
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // GOOGLE SIGN-IN + PERSONAL LOG FILE
+  // ---------------------------------------------------------------
+  function initGoogle() {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: LOG_SCOPE,
+      callback: async (resp) => {
+        if (resp.error) { alert("Sign-in failed: " + resp.error); return; }
+        accessToken = resp.access_token;
+        await findOrCreateLogFile();
+        await loadLogFile();
+        await loadSchedule();
+        render();
+      },
+    });
+  }
+
+  function signIn() {
+    if (CLIENT_ID.startsWith("YOUR_CLIENT_ID")) {
+      alert("This page isn't connected to Google yet.");
+      return;
+    }
+    tokenClient.requestAccessToken();
+  }
+  function signOut() {
+    accessToken = null;
+    logFileId = null;
+    log = { exercises: [...DEFAULT_EXERCISES], entries: [] };
+    render();
+  }
+
+  async function findOrCreateLogFile() {
+    try {
+      const q = encodeURIComponent(`name='${LOG_FILE_NAME}' and trashed=false`);
+      const res = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&fields=files(id,name)`,
+        { headers: { Authorization: "Bearer " + accessToken } }
+      );
+      const data = await res.json();
+      if (data.files && data.files.length > 0) {
+        logFileId = data.files[0].id;
+        return;
+      }
+      // Not found — create it for this member, seeded with the default exercise list.
+      const createRes = await fetch("https://www.googleapis.com/drive/v3/files", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
+        body: JSON.stringify({ name: LOG_FILE_NAME }),
+      });
+      const created = await createRes.json();
+      logFileId = created.id;
+      await fetch(
+        `https://www.googleapis.com/upload/drive/v3/files/${logFileId}?uploadType=media`,
+        {
+          method: "PATCH",
+          headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
+          body: JSON.stringify({ exercises: [...DEFAULT_EXERCISES], entries: [] }),
+        }
+      );
+    } catch (err) {
+      console.error("Couldn't find/create log file:", err);
+      alert("Couldn't set up your personal log file. Check the console for details.");
+    }
+  }
+
+  async function loadLogFile() {
+    if (!logFileId) return;
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${logFileId}?alt=media`,
+        { headers: { Authorization: "Bearer " + accessToken } }
+      );
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      log = {
+        exercises: data.exercises && data.exercises.length ? data.exercises : [...DEFAULT_EXERCISES],
+        entries: data.entries || [],
+      };
+    } catch (err) {
+      console.error("Couldn't load your log:", err);
+    }
+  }
+
+  let saveTimer = null;
+  function scheduleSave() {
+    setSaveStatus("Saving…");
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveLogFile, 500);
+  }
+  async function saveLogFile() {
+    if (!logFileId) return;
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/upload/drive/v3/files/${logFileId}?uploadType=media`,
+        {
+          method: "PATCH",
+          headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
+          body: JSON.stringify(log),
+        }
+      );
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      setSaveStatus("Saved");
+    } catch (err) {
+      console.error("Save failed:", err);
+      setSaveStatus("Save failed");
+    }
+  }
+  function setSaveStatus(text) {
+    const el = document.getElementById("save-status");
+    if (el) el.textContent = text;
+  }
+
+  // ---------------------------------------------------------------
+  // RENDER — root
+  // ---------------------------------------------------------------
+  function render() {
+    const app = document.getElementById("app");
+
+    if (!accessToken) {
+      app.innerHTML = `
+        <header><div class="wordmark">VIVA <span class="accent">FITNESS</span></div></header>
+        <div class="signin-screen">
+          <div class="msg">Sign in to track your lifts</div>
+          <div class="sub">Your results are saved privately to your own Google Drive — only you can see them.</div>
+          <button class="btn" onclick="signIn()">Sign in with Google</button>
+        </div>
+      `;
+      return;
+    }
+
+    app.innerHTML = `
+      <header>
+        <div class="wordmark">VIVA <span class="accent">FITNESS</span></div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span id="save-status" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--gray);opacity:0.6;"></span>
+          <button class="btn ghost" onclick="signOut()" style="padding:7px 12px;font-size:12px;">Sign out</button>
+        </div>
+      </header>
+      <div class="tabs">
+        <button class="tab-btn ${activeTab === "log" ? "selected" : ""}" onclick="setTab('log')">Log</button>
+        <button class="tab-btn ${activeTab === "progress" ? "selected" : ""}" onclick="setTab('progress')">Progress</button>
+      </div>
+      <div id="tab-body"></div>
+      ${sheet ? renderSheet() : ""}
+    `;
+
+    if (activeTab === "log") renderLogTab();
+    else renderProgressTab();
+  }
+
+  window.setTab = (tab) => { activeTab = tab; sheet = null; render(); };
+
+  // ---------------------------------------------------------------
+  // LOG TAB
+  // ---------------------------------------------------------------
+  function renderLogTab() {
+    const body = document.getElementById("tab-body");
+    const days = Array.from({ length: 21 }, (_, i) => addDays(new Date(), i - 7));
+    const dateChips = days.map((d) => {
+      const key = toKey(d);
+      const isSelected = key === toKey(selectedDate);
+      return `
+        <div class="date-chip ${isSelected ? "selected" : ""}" onclick="selectLogDate('${key}')">
+          <div class="day">${dayLabel(d)}</div>
+          <div class="num">${d.getDate()}</div>
+        </div>`;
+    }).join("");
+
+    const workout = currentWorkout();
+    const dateEntries = entriesForDate(toKey(selectedDate));
+
+    let partsHtml;
+    if (!workout || !workout.parts || workout.parts.length === 0) {
+      partsHtml = `<div class="empty-hint">No workout scheduled for ${fullLabel(selectedDate)}</div>`;
+    } else {
+      partsHtml = workout.parts.map((p) => {
+        const partEntries = dateEntries.filter((e) => e.partTitle === p.title);
+        return `
+          <div class="part-card">
+            <div class="part-title-row">
+              <div class="part-title">${escapeHtml(p.title)}</div>
+            </div>
+            <div class="part-content">${escapeHtml(p.content || "")}</div>
+            ${partEntries.map(renderEntryRow).join("")}
+            <button class="log-add-btn" onclick="openLogSheet('${escapeHtml(p.title)}')">+ Log result</button>
+          </div>
+        `;
+      }).join("");
+    }
+
+    body.innerHTML = `
+      <div class="date-strip">${dateChips}</div>
+      <main>
+        <div class="day-label">${fullLabel(selectedDate)}</div>
+        <div class="workout-title">${escapeHtml(workout ? workout.title || "Workout" : "")}</div>
+        ${partsHtml}
+      </main>
+    `;
+  }
+
+  function renderEntryRow(e) {
+    let main = "";
+    if (e.type === "lift") main = `${escapeHtml(e.exercise)} — ${e.weight}${e.unit || "lb"} × ${e.reps}`;
+    else if (e.type === "metcon") main = `${escapeHtml(e.label || "Metcon")} — ${escapeHtml(e.time)}`;
+    else main = "Note";
+    return `
+      <div class="entry-row">
+        <div>
+          <div class="entry-main">${main}</div>
+          ${e.notes ? `<div class="entry-notes">${escapeHtml(e.notes)}</div>` : ""}
+        </div>
+        <button class="entry-del" onclick="deleteEntry('${e.id}')">✕</button>
+      </div>`;
+  }
+
+  window.selectLogDate = (key) => {
+    const [y, m, d] = key.split("-").map(Number);
+    selectedDate = new Date(y, m - 1, d);
+    renderLogTab();
+  };
+
+  window.openLogSheet = (partTitle) => {
+    sheet = { partTitle };
+    entryType = "lift";
+    render();
+  };
+  window.closeSheet = (e) => { if (e && e.target !== e.currentTarget) return; sheet = null; render(); };
+
+  window.deleteEntry = (id) => {
+    log.entries = log.entries.filter((e) => e.id !== id);
+    scheduleSave();
+    render();
+  };
+
+  // ---------------------------------------------------------------
+  // ADD-ENTRY SHEET
+  // ---------------------------------------------------------------
+  function renderSheet() {
+    const exerciseOptions = log.exercises.map((ex) => `<option value="${escapeHtml(ex)}">${escapeHtml(ex)}</option>`).join("");
+
+    const liftFields = `
+      <div class="field-label">Exercise</div>
+      <select class="field-input" id="f-exercise">
+        ${exerciseOptions}
+        <option value="__new__">+ Add new exercise…</option>
+      </select>
+      <input type="text" class="field-input" id="f-exercise-new" placeholder="New exercise name" style="display:none;margin-top:8px;" />
+      <div class="field-row">
+        <div style="flex:1;">
+          <div class="field-label">Weight</div>
+          <input type="number" class="field-input" id="f-weight" placeholder="185" />
+        </div>
+        <div style="flex:1;">
+          <div class="field-label">Reps</div>
+          <input type="number" class="field-input" id="f-reps" placeholder="5" />
+        </div>
+      </div>
+    `;
+
+    const metconFields = `
+      <div class="field-label">Workout label</div>
+      <input type="text" class="field-input" id="f-label" placeholder="e.g. For Time" />
+      <div class="field-label">Result (time, rounds, score…)</div>
+      <input type="text" class="field-input" id="f-time" placeholder="e.g. 12:47 or 8 rounds + 5" />
+    `;
+
+    const noteFields = `
+      <div class="field-label">Note</div>
+      <textarea class="field-input" id="f-note-text" placeholder="How did it feel? Anything to remember next time?"></textarea>
+    `;
+
+    return `
+      <div class="sheet-backdrop" onclick="closeSheet(event)">
+        <div class="sheet" onclick="event.stopPropagation()">
+          <div class="sheet-handle"></div>
+          <div class="sheet-title-row">
+            <span class="sheet-title">Log: ${escapeHtml(sheet.partTitle)}</span>
+            <button class="icon-btn" onclick="closeSheet()">✕</button>
+          </div>
+          <div class="type-switch">
+            <button class="${entryType === "lift" ? "selected" : ""}" onclick="setEntryType('lift')">Lift</button>
+            <button class="${entryType === "metcon" ? "selected" : ""}" onclick="setEntryType('metcon')">Metcon</button>
+            <button class="${entryType === "note" ? "selected" : ""}" onclick="setEntryType('note')">Note</button>
+          </div>
+          ${entryType === "lift" ? liftFields : ""}
+          ${entryType === "metcon" ? metconFields : ""}
+          ${entryType === "note" ? noteFields : ""}
+          <div class="field-label">Notes (optional)</div>
+          <textarea class="field-input" id="f-notes" placeholder="Optional"></textarea>
+          <button class="btn block" style="margin-top:16px;" onclick="saveEntry()">Save</button>
+        </div>
+      </div>
+    `;
+  }
+
+  window.setEntryType = (type) => { entryType = type; render(); };
+
+  // Show/hide the "new exercise" text field when "+ Add new exercise…" is chosen.
+  document.addEventListener("change", (e) => {
+    if (e.target && e.target.id === "f-exercise") {
+      const newField = document.getElementById("f-exercise-new");
+      if (newField) newField.style.display = e.target.value === "__new__" ? "block" : "none";
+    }
+  });
+
+  window.saveEntry = () => {
+    if (!sheet) return;
+    const base = { id: uid(), date: toKey(selectedDate), partTitle: sheet.partTitle, type: entryType, createdAt: Date.now() };
+    const notesEl = document.getElementById("f-notes");
+    base.notes = notesEl ? notesEl.value.trim() : "";
+
+    if (entryType === "lift") {
+      const exSelect = document.getElementById("f-exercise");
+      let exercise = exSelect.value;
+      if (exercise === "__new__") {
+        const newName = document.getElementById("f-exercise-new").value.trim();
+        if (!newName) { alert("Enter a name for the new exercise."); return; }
+        exercise = newName;
+        if (!log.exercises.includes(newName)) log.exercises.push(newName);
+      }
+      const weight = parseFloat(document.getElementById("f-weight").value);
+      const reps = parseInt(document.getElementById("f-reps").value, 10);
+      if (!exercise || isNaN(weight) || isNaN(reps)) { alert("Fill in exercise, weight, and reps."); return; }
+      Object.assign(base, { exercise, weight, reps, unit: "lb" });
+    } else if (entryType === "metcon") {
+      const label = document.getElementById("f-label").value.trim();
+      const time = document.getElementById("f-time").value.trim();
+      if (!time) { alert("Enter a result."); return; }
+      Object.assign(base, { label: label || sheet.partTitle, time });
+    } else {
+      const text = document.getElementById("f-note-text").value.trim();
+      if (!text) { alert("Enter a note."); return; }
+      base.notes = text + (base.notes ? "\n" + base.notes : "");
+    }
+
+    log.entries.push(base);
+    scheduleSave();
+    sheet = null;
+    render();
+  };
+
+  // ---------------------------------------------------------------
+  // PROGRESS TAB
+  // ---------------------------------------------------------------
+  function renderProgressTab() {
+    const body = document.getElementById("tab-body");
+    const liftEntries = log.entries.filter((e) => e.type === "lift");
+    const exercises = log.exercises.filter((ex) => liftEntries.some((e) => e.exercise === ex));
+
+    if (!progressExercise || !exercises.includes(progressExercise)) {
+      progressExercise = exercises[0] || null;
+    }
+
+    if (!progressExercise) {
+      body.innerHTML = `<main><div class="no-data">Log a few lifts to see progression charts here.</div></main>`;
+      return;
+    }
+
+    const forExercise = liftEntries.filter((e) => e.exercise === progressExercise);
+    const repOptions = Array.from(new Set(forExercise.map((e) => e.reps))).sort((a, b) => a - b);
+
+    const exerciseOptionsHtml = exercises.map((ex) => `<option value="${escapeHtml(ex)}" ${ex === progressExercise ? "selected" : ""}>${escapeHtml(ex)}</option>`).join("");
+    const repOptionsHtml = `<option value="all" ${progressReps === "all" ? "selected" : ""}>All rep schemes</option>` +
+      repOptions.map((r) => `<option value="${r}" ${String(progressReps) === String(r) ? "selected" : ""}>${r} rep${r === 1 ? "" : "s"}</option>`).join("");
+
+    body.innerHTML = `
+      <main>
+        <div class="filters-row">
+          <select class="filter-select" id="progress-exercise" onchange="onProgressExerciseChange(this.value)">${exerciseOptionsHtml}</select>
+          <select class="filter-select" id="progress-reps" onchange="onProgressRepsChange(this.value)">${repOptionsHtml}</select>
+        </div>
+        <div class="chart-wrap"><canvas id="progress-chart" height="220"></canvas></div>
+        <div id="history-list" class="history-list"></div>
+      </main>
+    `;
+
+    drawProgressChart();
+  }
+
+  window.onProgressExerciseChange = (val) => { progressExercise = val; progressReps = "all"; renderProgressTab(); };
+  window.onProgressRepsChange = (val) => { progressReps = val; drawProgressChart(); };
+
+  function drawProgressChart() {
+    const liftEntries = log.entries.filter((e) => e.type === "lift" && e.exercise === progressExercise);
+    const filtered = (progressReps === "all" ? liftEntries : liftEntries.filter((e) => String(e.reps) === String(progressReps)))
+      .slice()
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const canvas = document.getElementById("progress-chart");
+    const historyEl = document.getElementById("history-list");
+    if (!canvas) return;
+
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+
+    if (filtered.length === 0) {
+      canvas.style.display = "none";
+      historyEl.innerHTML = `<div class="no-data">No logged sets for this filter yet.</div>`;
+      return;
+    }
+    canvas.style.display = "block";
+
+    const styles = getComputedStyle(document.documentElement);
+    const teal = styles.getPropertyValue("--teal").trim();
+    const cream = styles.getPropertyValue("--cream").trim();
+    const gridColor = styles.getPropertyValue("--panel-raised").trim();
+
+    chartInstance = new Chart(canvas.getContext("2d"), {
+      type: "line",
+      data: {
+        labels: filtered.map((e) => e.date),
+        datasets: [{
+          label: progressExercise + (progressReps === "all" ? "" : ` (${progressReps} reps)`),
+          data: filtered.map((e) => e.weight),
+          borderColor: teal,
+          backgroundColor: teal,
+          pointBackgroundColor: teal,
+          tension: 0.25,
+          fill: false,
+        }],
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { labels: { color: cream, font: { family: "Inter" } } },
+        },
+        scales: {
+          x: { ticks: { color: cream, font: { family: "IBM Plex Mono" } }, grid: { color: gridColor } },
+          y: { ticks: { color: cream, font: { family: "IBM Plex Mono" } }, grid: { color: gridColor } },
+        },
+      },
+    });
+
+    historyEl.innerHTML = filtered.slice().reverse().map((e) =>
+      `<div class="history-row"><span>${e.date}</span><span>${e.weight}${e.unit || "lb"} × ${e.reps}</span></div>`
+    ).join("");
+  }
+
+  // ---------------------------------------------------------------
+  // INIT
+  // ---------------------------------------------------------------
+  window.addEventListener("load", () => {
+    const wait = setInterval(() => {
+      if (window.google && google.accounts) {
+        clearInterval(wait);
+        initGoogle();
+        render();
+      }
+    }, 100);
+  });
+</script>
+</body>
+</html>
